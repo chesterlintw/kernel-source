@@ -1,0 +1,36 @@
+From: Chester Lin <clin@suse.com>
+Date: Wed, 21 Jul 2019 18:00:00 +0800
+Subject: [PATCH] arm efi: adjust FDT allocation address
+Patch-mainline: Never, debugging
+References: bsc#1122614
+
+Append the FDT behind the kernel base in order to prevent the EFI stub from
+allocating memory from ignored regions before the kernel base.
+
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ drivers/firmware/efi/libstub/arm-stub.c |    4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+--- a/drivers/firmware/efi/libstub/arm-stub.c
++++ b/drivers/firmware/efi/libstub/arm-stub.c
+@@ -117,6 +117,7 @@ unsigned long efi_entry(void *handle, ef
+ 	efi_status_t status;
+ 	unsigned long image_size = 0;
+ 	unsigned long dram_base;
++	unsigned long fdt_base;
+ 	/* addr/point and size pairs for memory management*/
+ 	unsigned long initrd_addr;
+ 	u64 initrd_size = 0;
+@@ -259,9 +260,10 @@ unsigned long efi_entry(void *handle, ef
+ 
+ 	install_memreserve_table(sys_table);
+ 
++	fdt_base = max(dram_base, reserve_addr);
+ 	new_fdt_addr = fdt_addr;
+ 	status = allocate_new_fdt_and_exit_boot(sys_table, handle,
+-				&new_fdt_addr, efi_get_max_fdt_addr(dram_base),
++				&new_fdt_addr, efi_get_max_fdt_addr(fdt_base),
+ 				initrd_addr, initrd_size, cmdline_ptr,
+ 				fdt_addr, fdt_size);
+ 
