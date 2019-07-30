@@ -1,0 +1,27 @@
+From a9d505134b8fd3ce9c9a3c7903a5b7260c969255 Mon Sep 17 00:00:00 2001
+From: "Lee, Chun-Yi" <jlee@suse.com>
+Date: Wed, 10 Jul 2019 16:48:57 +0800
+Subject: arm efi: use conventional memory region for kernel
+Patch-mainline: Never, debugging
+References: bsc#1122614
+
+Add the logic for using EFI_CONVENTIONAL_MEMORY type when getting
+dram_base.
+
+Signed-off-by: Lee, Chun-Yi <jlee@suse.com>
+---
+ drivers/firmware/efi/libstub/efi-stub-helper.c |    3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
++++ b/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -153,7 +153,8 @@ unsigned long get_dram_base(efi_system_t
+ 	map.map_end = map.map + map_size;
+ 
+ 	for_each_efi_memory_desc_in_map(&map, md) {
+-		if (md->attribute & EFI_MEMORY_WB) {
++		if ((md->type == EFI_CONVENTIONAL_MEMORY) &&
++		    (md->attribute & EFI_MEMORY_WB)) {
+ 			if (membase > md->phys_addr)
+ 				membase = md->phys_addr;
+ 		}
