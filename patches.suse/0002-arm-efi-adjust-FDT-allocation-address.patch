@@ -1,0 +1,56 @@
+From d37a083c491a14683e3b7fa736fdf51af21a197e Mon Sep 17 00:00:00 2001
+From: Chester Lin <clin@suse.com>
+Date: Sun, 21 Jul 2019 18:00:00 +0800
+Subject: arm efi: adjust FDT allocation address base
+Patch-mainline: Never, debugging
+References: bsc#1122614
+
+Append the FDT behind the kernel base in order to prevent the arm32 EFI
+stub from allocating memory from ignored regions before the kernel base.
+
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ arch/arm/include/asm/efi.h              |    5 +++--
+ arch/arm64/include/asm/efi.h            |    3 ++-
+ drivers/firmware/efi/libstub/arm-stub.c |    3 ++-
+ 3 files changed, 7 insertions(+), 4 deletions(-)
+
+--- a/arch/arm/include/asm/efi.h
++++ b/arch/arm/include/asm/efi.h
+@@ -87,9 +87,10 @@ static inline void efifb_setup_from_dmi(
+ #define MIN_ZIMAGE_OFFSET	MAX_UNCOMP_KERNEL_SIZE
+ 
+ /* on ARM, the FDT should be located in the first 128 MB of RAM */
+-static inline unsigned long efi_get_max_fdt_addr(unsigned long dram_base)
++static inline unsigned long efi_get_max_fdt_addr(unsigned long dram_base,
++						 unsigned long kernel_base)
+ {
+-	return dram_base + ZIMAGE_OFFSET_LIMIT;
++	return max(dram_base, kernel_base) + ZIMAGE_OFFSET_LIMIT;
+ }
+ 
+ /* on ARM, the initrd should be loaded in a lowmem region */
+--- a/arch/arm64/include/asm/efi.h
++++ b/arch/arm64/include/asm/efi.h
+@@ -72,7 +72,8 @@ efi_status_t __efi_rt_asm_wrapper(void *
+ 	(SEGMENT_ALIGN > THREAD_ALIGN ? SEGMENT_ALIGN : THREAD_ALIGN)
+ 
+ /* on arm64, the FDT may be located anywhere in system RAM */
+-static inline unsigned long efi_get_max_fdt_addr(unsigned long dram_base)
++static inline unsigned long efi_get_max_fdt_addr(unsigned long dram_base,
++						 unsigned long kernel_base)
+ {
+ 	return ULONG_MAX;
+ }
+--- a/drivers/firmware/efi/libstub/arm-stub.c
++++ b/drivers/firmware/efi/libstub/arm-stub.c
+@@ -261,7 +261,8 @@ unsigned long efi_entry(void *handle, ef
+ 
+ 	new_fdt_addr = fdt_addr;
+ 	status = allocate_new_fdt_and_exit_boot(sys_table, handle,
+-				&new_fdt_addr, efi_get_max_fdt_addr(dram_base),
++				&new_fdt_addr,
++				efi_get_max_fdt_addr(dram_base, reserve_addr),
+ 				initrd_addr, initrd_size, cmdline_ptr,
+ 				fdt_addr, fdt_size);
+ 
