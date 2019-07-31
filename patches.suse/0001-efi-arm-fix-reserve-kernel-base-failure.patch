@@ -1,0 +1,111 @@
+From a9d505134b8fd3ce9c9a3c7903a5b7260c969255 Mon Sep 17 00:00:00 2001
+From: Chester Lin <clin@suse.com>
+Date: Wed, 10 Jul 2019 16:48:57 +0800
+Subject: efi/arm: fix allocation failure when reserving the kernel base
+Patch-mainline: Never, debugging
+References: bsc#1122614
+
+Add the logic for using EFI_CONVENTIONAL_MEMORY type when getting
+dram_base.
+
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ arch/arm/mm/mmu.c                         |    3 ++
+ drivers/firmware/efi/libstub/arm32-stub.c |   38 ++++++++++++++++++++++--------
+ 2 files changed, 32 insertions(+), 9 deletions(-)
+
+--- a/arch/arm/mm/mmu.c
++++ b/arch/arm/mm/mmu.c
+@@ -1181,6 +1181,9 @@ void __init adjust_lowmem_bounds(void)
+ 		phys_addr_t block_start = reg->base;
+ 		phys_addr_t block_end = reg->base + reg->size;
+ 
++		if (memblock_is_nomap(reg))
++			continue;
++
+ 		if (reg->base < vmalloc_limit) {
+ 			if (block_end > lowmem_limit)
+ 				/*
+--- a/drivers/firmware/efi/libstub/arm32-stub.c
++++ b/drivers/firmware/efi/libstub/arm32-stub.c
+@@ -128,7 +128,7 @@ static efi_status_t reserve_kernel_base(
+ 
+ 	for (l = 0; l < map_size; l += desc_size) {
+ 		efi_memory_desc_t *desc;
+-		u64 start, end;
++		u64 start, end, spare, kernel_base;
+ 
+ 		desc = (void *)memory_map + l;
+ 		start = desc->phys_addr;
+@@ -144,27 +144,47 @@ static efi_status_t reserve_kernel_base(
+ 		case EFI_BOOT_SERVICES_DATA:
+ 			/* Ignore types that are released to the OS anyway */
+ 			continue;
+-
++		case EFI_RESERVED_TYPE:
++			/* Ignore reserved regions */
++			continue;
+ 		case EFI_CONVENTIONAL_MEMORY:
+ 			/*
+ 			 * Reserve the intersection between this entry and the
+ 			 * region.
+ 			 */
+ 			start = max(start, (u64)dram_base);
+-			end = min(end, (u64)dram_base + MAX_UNCOMP_KERNEL_SIZE);
++			kernel_base = round_up(start, PMD_SIZE);
++			spare = kernel_base - start;
++			end = min(end, kernel_base + MAX_UNCOMP_KERNEL_SIZE);
++
++			status = efi_call_early(allocate_pages,
++					EFI_ALLOCATE_ADDRESS,
++					EFI_LOADER_DATA,
++					MAX_UNCOMP_KERNEL_SIZE / EFI_PAGE_SIZE,
++					&kernel_base);
++			if (status != EFI_SUCCESS) {
++				pr_efi_err(sys_table_arg,
++					"%s : alloc failed.\n", __func__);
++				goto out;
++			}
++			*reserve_addr = kernel_base;
++
++			if (!spare)
++				break;
+ 
+ 			status = efi_call_early(allocate_pages,
+ 						EFI_ALLOCATE_ADDRESS,
+-						EFI_LOADER_DATA,
+-						(end - start) / EFI_PAGE_SIZE,
++						EFI_RESERVED_TYPE,
++						spare / EFI_PAGE_SIZE,
+ 						&start);
+ 			if (status != EFI_SUCCESS) {
+ 				pr_efi_err(sys_table_arg,
+-					"reserve_kernel_base(): alloc failed.\n");
++					"%s : reserve spare region failed\n",
++					__func__);
+ 				goto out;
+ 			}
+-			break;
+ 
++			break;
+ 		case EFI_LOADER_CODE:
+ 		case EFI_LOADER_DATA:
+ 			/*
+@@ -220,7 +240,7 @@ efi_status_t handle_kernel_image(efi_sys
+ 	*image_size = image->image_size;
+ 	status = efi_relocate_kernel(sys_table, image_addr, *image_size,
+ 				     *image_size,
+-				     dram_base + MAX_UNCOMP_KERNEL_SIZE, 0);
++				     *reserve_addr + MAX_UNCOMP_KERNEL_SIZE, 0);
+ 	if (status != EFI_SUCCESS) {
+ 		pr_efi_err(sys_table, "Failed to relocate kernel.\n");
+ 		efi_free(sys_table, *reserve_size, *reserve_addr);
+@@ -233,7 +253,7 @@ efi_status_t handle_kernel_image(efi_sys
+ 	 * in memory. The kernel determines the base of DRAM from the
+ 	 * address at which the zImage is loaded.
+ 	 */
+-	if (*image_addr + *image_size > dram_base + ZIMAGE_OFFSET_LIMIT) {
++	if (*image_addr + *image_size > *reserve_addr + ZIMAGE_OFFSET_LIMIT) {
+ 		pr_efi_err(sys_table, "Failed to relocate kernel, no low memory available.\n");
+ 		efi_free(sys_table, *reserve_size, *reserve_addr);
+ 		*reserve_size = 0;
