@@ -7,27 +7,35 @@ References: bsc#1122614
 
 In some cases the arm32 efistub could fail to allocate memory for
 uncompressed kernel. For example, we got the following error message when
-verifying EFI stub on Raspberry Pi-2:
+verifying EFI stub on Raspberry Pi-2 [kernel-5.2.1 + grub-2.04] :
 
   EFI stub: Booting Linux Kernel...
   EFI stub: ERROR: Unable to allocate memory for uncompressed kernel.
   EFI stub: ERROR: Failed to relocate kernel
 
-After checking the EFI memory map we found that the first page [0 - 0x1000]
+After checking the EFI memory map we found that the first page [0 - 0xfff]
 had been reserved by Raspberry Pi-2's firmware, and the efistub tried to
 set the dram base at 0, which was actually in a reserved region.
 
-To avoid choosing a reserved address, we have to ignore the memory regions
-which are marked as EFI_RESERVED_TYPE, and only conventional memory regions
-can be chosen. If the region before the kernel base is unaligned, it will
-be marked as EFI_RESERVED_TYPE and let kernel ignore it so that memblock
-limit will not be sticked with a very low address such as 0x1000.
+  grub> lsefimmap
+  Type      Physical start  - end             #Pages        Size Attributes
+  reserved  0000000000000000-0000000000000fff 00000001      4KiB WB
+  conv-mem  0000000000001000-0000000007ef5fff 00007ef5 130004KiB WB
+  RT-data   0000000007ef6000-0000000007f09fff 00000014     80KiB RT WB
+  conv-mem  0000000007f0a000-000000002d871fff 00025968 615840KiB WB
+  .....
+
+To avoid a reserved address, we have to ignore the memory regions which are
+marked as EFI_RESERVED_TYPE, and only conventional memory regions can be
+chosen. If the region before the kernel base is unaligned, it will be
+marked as EFI_RESERVED_TYPE and let kernel ignore it so that memblock_limit
+will not be sticked with a very low address such as 0x1000.
 
 Signed-off-by: Chester Lin <clin@suse.com>
 ---
  arch/arm/mm/mmu.c                         |    3 ++
- drivers/firmware/efi/libstub/arm32-stub.c |   37 ++++++++++++++++++++++--------
- 2 files changed, 31 insertions(+), 9 deletions(-)
+ drivers/firmware/efi/libstub/arm32-stub.c |   43 +++++++++++++++++++++++-------
+ 2 files changed, 37 insertions(+), 9 deletions(-)
 
 --- a/arch/arm/mm/mmu.c
 +++ b/arch/arm/mm/mmu.c
@@ -52,7 +60,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  
  		desc = (void *)memory_map + l;
  		start = desc->phys_addr;
-@@ -144,27 +144,46 @@ static efi_status_t reserve_kernel_base(
+@@ -144,27 +144,52 @@ static efi_status_t reserve_kernel_base(
  		case EFI_BOOT_SERVICES_DATA:
  			/* Ignore types that are released to the OS anyway */
  			continue;
@@ -82,10 +90,16 @@ Signed-off-by: Chester Lin <clin@suse.com>
 +				goto out;
 +			}
 +			*reserve_addr = kernel_base;
-+
+ 
 +			if (!spare)
 +				break;
- 
++			/*
++			 * If there's a gap between start and kernel_base,
++			 * it needs be reserved so that the memblock_limit
++			 * will not fall on a very low address when running
++			 * adjust_lowmem_bounds(), wchich could eventually
++			 * cause CMA reservation issue.
++			 */
  			status = efi_call_early(allocate_pages,
  						EFI_ALLOCATE_ADDRESS,
 -						EFI_LOADER_DATA,
@@ -105,7 +119,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  		case EFI_LOADER_CODE:
  		case EFI_LOADER_DATA:
  			/*
-@@ -220,7 +239,7 @@ efi_status_t handle_kernel_image(efi_sys
+@@ -220,7 +245,7 @@ efi_status_t handle_kernel_image(efi_sys
  	*image_size = image->image_size;
  	status = efi_relocate_kernel(sys_table, image_addr, *image_size,
  				     *image_size,
@@ -114,7 +128,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	if (status != EFI_SUCCESS) {
  		pr_efi_err(sys_table, "Failed to relocate kernel.\n");
  		efi_free(sys_table, *reserve_size, *reserve_addr);
-@@ -233,7 +252,7 @@ efi_status_t handle_kernel_image(efi_sys
+@@ -233,7 +258,7 @@ efi_status_t handle_kernel_image(efi_sys
  	 * in memory. The kernel determines the base of DRAM from the
  	 * address at which the zImage is loaded.
  	 */
