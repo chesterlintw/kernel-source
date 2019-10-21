@@ -1,0 +1,26 @@
+From 20e98a22421d215b600c5f86f07e0470aa56369f Mon Sep 17 00:00:00 2001
+From: Jim Quinlan <jim2101024@gmail.com>
+Date: Fri, 18 Oct 2019 17:12:26 +0800
+Subject: [PATCH] brcmstb: fix compiling error in memory-api.h
+Patch-Mainline: Not yet, a temp workaround
+References: rpi4 porting
+
+Fix the compiling error of include/soc/brcmstb/memory-api.h
+
+Signed-off-by: Chester Lin <clin@suse.com>
+
+
+---
+ include/soc/brcmstb/memory_api.h |    1 +
+ 1 file changed, 1 insertion(+)
+
+--- a/include/soc/brcmstb/memory_api.h
++++ b/include/soc/brcmstb/memory_api.h
+@@ -2,6 +2,7 @@
+ #ifndef __MEMORY_API_H
+ #define __MEMORY_API_H
+ 
++#include <linux/types.h>
+ /*
+  * Bus Interface Unit control register setup, must happen early during boot,
+  * before SMP is brought up, called by machine entry point.
