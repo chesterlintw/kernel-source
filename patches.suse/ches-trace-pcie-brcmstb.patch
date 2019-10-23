@@ -1,0 +1,32 @@
+From 20e98a22421d215b600c5f86f07e0470aa56369f Mon Sep 17 00:00:00 2001
+From: Chester Lin <clin@suse.com>
+Date: Fri, 18 Oct 2019 17:12:26 +0800
+Subject: [PATCH] brcmstb: Add debug logs to investigate PCI failure
+Patch-Mainline: Not yet, a temp workaround
+References: rpi4 porting
+
+Chester's debug patch.
+
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ drivers/pci/controller/pcie-brcmstb.c |    5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+--- a/drivers/pci/controller/pcie-brcmstb.c
++++ b/drivers/pci/controller/pcie-brcmstb.c
+@@ -1476,11 +1476,14 @@ static int brcm_pcie_probe(struct platfo
+ 	if (ret)
+ 		return ret;
+ 
++	dev_info(pcie->dev, "ches: before enabling clk\n");
+ 	ret = clk_prepare_enable(pcie->clk);
+ 	if (ret) {
+-		dev_err(&pdev->dev, "could not enable clock\n");
++		if (ret != -EPROBE_DEFER)
++			dev_err(&pdev->dev, "could not enable clock\n");
+ 		return ret;
+ 	}
++	dev_info(pcie->dev, "ches: after enabling clk\n");
+ 
+ 	ret = brcm_pcie_add_controller(pcie);
+ 	if (ret)
