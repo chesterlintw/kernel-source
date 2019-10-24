@@ -9,12 +9,62 @@ Chester's debug patch.
 
 Signed-off-by: Chester Lin <clin@suse.com>
 ---
- drivers/pci/controller/pcie-brcmstb.c |    5 ++++-
- 1 file changed, 4 insertions(+), 1 deletion(-)
+ drivers/pci/controller/pcie-brcmstb.c |   29 ++++++++++++++++++++++++-----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
 
 --- a/drivers/pci/controller/pcie-brcmstb.c
 +++ b/drivers/pci/controller/pcie-brcmstb.c
-@@ -1476,11 +1476,14 @@ static int brcm_pcie_probe(struct platfo
+@@ -998,9 +998,10 @@ static int brcm_pcie_add_controller(stru
+ 	}
+ 
+ 	ret = brcm_pcie_parse_map_dma_ranges(pcie);
+-	if (ret)
++	if (ret) {
++		dev_err(dev, "failed to parse dma ranges: %d\n", ret);
+ 		goto done;
+-
++	}
+ 	/* Determine num_memc and their sizes */
+ 	for (i = 0, num_memc = 0; i < BRCM_MAX_SCB; i++) {
+ 		u64 size = brcmstb_memory_memc_size(i);
+@@ -1013,10 +1014,12 @@ static int brcm_pcie_add_controller(stru
+ 			scb_size[i] = roundup_pow_of_two_64(size);
+ 			num_memc++;
+ 		} else {
++			dev_err(dev, "size = 0\n");
+ 			break;
+ 		}
+ 	}
+ 	if (!ret && num_memc == 0) {
++		dev_err(dev, "ret=0 and num_memc=0\n");
+ 		ret = -EINVAL;
+ 		goto done;
+ 	}
+@@ -1116,8 +1119,21 @@ static int brcm_pcie_setup(struct brcm_p
+ 	/* Set SCB_MAX_BURST_SIZE, CFG_READ_UR_MODE, SCB_ACCESS_EN */
+ 	tmp = INSERT_FIELD(0, PCIE_MISC_MISC_CTRL, SCB_ACCESS_EN, 1);
+ 	tmp = INSERT_FIELD(tmp, PCIE_MISC_MISC_CTRL, CFG_READ_UR_MODE, 1);
+-	burst = (pcie->type == GENERIC || pcie->type == BCM7278)
+-		? BURST_SIZE_512 : BURST_SIZE_256;
++
++	switch (pcie->type) {
++	case GENERIC:
++		burst = BURST_SIZE_128;
++		break;
++	case BCM7278:
++		burst = BURST_SIZE_512;
++		break;
++	default:
++		burst = BURST_SIZE_256;
++		break;
++	}
++
++	dev_info(dev, "type:%#x, burst:%#x\n", pcie->type, burst);
++
+ 	tmp = INSERT_FIELD(tmp, PCIE_MISC_MISC_CTRL, MAX_BURST_SIZE, burst);
+ 	bcm_writel(tmp, base + PCIE_MISC_MISC_CTRL);
+ 
+@@ -1476,11 +1492,14 @@ static int brcm_pcie_probe(struct platfo
  	if (ret)
  		return ret;
  
