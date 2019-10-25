@@ -9,11 +9,21 @@ Chester's debug patch.
 
 Signed-off-by: Chester Lin <clin@suse.com>
 ---
- drivers/pci/controller/pcie-brcmstb.c |   29 ++++++++++++++++++++++++-----
- 1 file changed, 24 insertions(+), 5 deletions(-)
+ drivers/pci/controller/pcie-brcmstb.c |   39 +++++++++++++++++++++++++++-------
+ drivers/soc/bcm/brcmstb/memory.c      |    5 ++--
+ 2 files changed, 35 insertions(+), 9 deletions(-)
 
 --- a/drivers/pci/controller/pcie-brcmstb.c
 +++ b/drivers/pci/controller/pcie-brcmstb.c
+@@ -122,7 +122,7 @@
+ #define PCIE_RGR1_SW_INIT_1_PERST_SHIFT				0x0
+ 
+ #define BRCM_NUM_PCIE_OUT_WINS		0x4
+-#define BRCM_MAX_SCB			0x4
++#define BRCM_MAX_SCB			0x1
+ #define BRCM_INT_PCI_MSI_NR		32
+ #define BRCM_PCIE_HW_REV_33		0x0303
+ 
 @@ -998,9 +998,10 @@ static int brcm_pcie_add_controller(stru
  	}
  
@@ -64,11 +74,11 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	tmp = INSERT_FIELD(tmp, PCIE_MISC_MISC_CTRL, MAX_BURST_SIZE, burst);
  	bcm_writel(tmp, base + PCIE_MISC_MISC_CTRL);
  
-@@ -1476,11 +1492,14 @@ static int brcm_pcie_probe(struct platfo
+@@ -1476,25 +1492,32 @@ static int brcm_pcie_probe(struct platfo
  	if (ret)
  		return ret;
  
-+	dev_info(pcie->dev, "ches: before enabling clk\n");
++	dev_info(pcie->dev, "ches: enabling clk\n");
  	ret = clk_prepare_enable(pcie->clk);
  	if (ret) {
 -		dev_err(&pdev->dev, "could not enable clock\n");
@@ -76,7 +86,61 @@ Signed-off-by: Chester Lin <clin@suse.com>
 +			dev_err(&pdev->dev, "could not enable clock\n");
  		return ret;
  	}
-+	dev_info(pcie->dev, "ches: after enabling clk\n");
++	dev_info(pcie->dev, "ches: add controller\n");
  
  	ret = brcm_pcie_add_controller(pcie);
  	if (ret)
+ 		return ret;
+ 
++	dev_info(pcie->dev, "ches: pcie setup\n");
++
+ 	ret = brcm_pcie_setup(pcie);
+ 	if (ret)
+ 		goto fail;
+ 
++	dev_info(pcie->dev, "ches: parse handle\n");
+ 	msi_dn = of_parse_phandle(pcie->dn, "msi-parent", 0);
+ 	/* Use the internal MSI if no msi-parent property */
+ 	if (!msi_dn)
+ 		msi_dn = pcie->dn;
+ 
++	dev_info(pcie->dev, "ches: enable msi\n");
+ 	if (pci_msi_enabled() && msi_dn == pcie->dn) {
+ 		ret = brcm_pcie_enable_msi(pcie);
+ 		if (ret)
+@@ -1512,6 +1535,7 @@ static int brcm_pcie_probe(struct platfo
+ 	bridge->map_irq = of_irq_parse_and_map_pci;
+ 	bridge->swizzle_irq = pci_common_swizzle;
+ 
++	dev_info(pcie->dev, "ches: scan root bridge\n");
+ 	ret = pci_scan_root_bus_bridge(bridge);
+ 	if (ret < 0) {
+ 		dev_err(pcie->dev, "Scanning root bridge failed\n");
+@@ -1521,10 +1545,11 @@ static int brcm_pcie_probe(struct platfo
+ 	pci_assign_unassigned_bus_resources(bridge->bus);
+ 	list_for_each_entry(child, &bridge->bus->children, node)
+ 		pcie_bus_configure_settings(child);
++	dev_info(pcie->dev, "ches: add device\n");
+ 	pci_bus_add_devices(bridge->bus);
+ 	platform_set_drvdata(pdev, pcie);
+ 	pcie->root_bus = bridge->bus;
+-
++	dev_info(pcie->dev, "ches: end\n");
+ 	return 0;
+ fail:
+ 	_brcm_pcie_remove(pcie);
+--- a/drivers/soc/bcm/brcmstb/memory.c
++++ b/drivers/soc/bcm/brcmstb/memory.c
+@@ -147,9 +147,10 @@ u64 brcmstb_memory_memc_size(int memc)
+ 			return -1;
+ 		}
+ 
++		pr_info("idx: %d, (%#lx,%lx)\n", memc_idx, addr, size);
+ 		memc_idx = brcmstb_memory_phys_addr_to_memc((phys_addr_t)addr);
+-		if (memc_idx == memc)
+-			memc_size += size;
++		//if (memc_idx == memc)
++		memc_size += size;
+ 	}
+ 
+ 	return memc_size;
