@@ -1,0 +1,99 @@
+From: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Subject: [RFC,2/5] ARM: introduce arm_dma_direct
+Date: Mon, 14 Oct 2019 18:31:43 +0200
+Patch-mainline: Submitted, https://patchwork.kernel.org/patch/11189291/
+References: jsc#SLE-7772
+
+ARM devices might use the arch's custom dma-mapping implementation or
+dma-direct/swiotlb depending on how the kernel is built. This is not
+good enough as we need to be able to control the device's DMA ops based
+on the specific machine configuration.
+
+Centralise control over DMA ops with arm_dma_direct, a global variable
+which will be set accordingly during init.
+
+Signed-off-by: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ arch/arm/include/asm/dma-mapping.h |    3 ++-
+ arch/arm/include/asm/dma.h         |    2 ++
+ arch/arm/mm/dma-mapping.c          |   13 +------------
+ arch/arm/mm/init.c                 |   13 +++++++++++++
+ 4 files changed, 18 insertions(+), 13 deletions(-)
+
+--- a/arch/arm/include/asm/dma-mapping.h
++++ b/arch/arm/include/asm/dma-mapping.h
+@@ -8,6 +8,7 @@
+ #include <linux/scatterlist.h>
+ #include <linux/dma-debug.h>
+ 
++#include <asm/dma.h>
+ #include <asm/memory.h>
+ 
+ #include <xen/xen.h>
+@@ -18,7 +19,7 @@ extern const struct dma_map_ops arm_cohe
+ 
+ static inline const struct dma_map_ops *get_arch_dma_ops(struct bus_type *bus)
+ {
+-	if (IS_ENABLED(CONFIG_MMU) && !IS_ENABLED(CONFIG_ARM_LPAE))
++	if (IS_ENABLED(CONFIG_MMU) && !arm_dma_direct)
+ 		return &arm_dma_ops;
+ 	return NULL;
+ }
+--- a/arch/arm/include/asm/dma.h
++++ b/arch/arm/include/asm/dma.h
+@@ -14,6 +14,8 @@
+ 		(PAGE_OFFSET + arm_dma_zone_size) : 0xffffffffUL; })
+ #endif
+ 
++extern bool arm_dma_direct __ro_after_init;
++
+ #ifdef CONFIG_ISA_DMA_API
+ /*
+  * This is used to support drivers written for the x86 ISA DMA API.
+--- a/arch/arm/mm/dma-mapping.c
++++ b/arch/arm/mm/dma-mapping.c
+@@ -1126,18 +1126,7 @@ int arm_dma_supported(struct device *dev
+ 
+ static const struct dma_map_ops *arm_get_dma_map_ops(bool coherent)
+ {
+-	/*
+-	 * When CONFIG_ARM_LPAE is set, physical address can extend above
+-	 * 32-bits, which then can't be addressed by devices that only support
+-	 * 32-bit DMA.
+-	 * Use the generic dma-direct / swiotlb ops code in that case, as that
+-	 * handles bounce buffering for us.
+-	 *
+-	 * Note: this checks CONFIG_ARM_LPAE instead of CONFIG_SWIOTLB as the
+-	 * latter is also selected by the Xen code, but that code for now relies
+-	 * on non-NULL dev_dma_ops.  To be cleaned up later.
+-	 */
+-	if (IS_ENABLED(CONFIG_ARM_LPAE))
++	if (arm_dma_direct)
+ 		return NULL;
+ 	return coherent ? &arm_coherent_dma_ops : &arm_dma_ops;
+ }
+--- a/arch/arm/mm/init.c
++++ b/arch/arm/mm/init.c
+@@ -105,8 +105,21 @@ static void __init arm_adjust_dma_zone(u
+ }
+ #endif
+ 
++bool arm_dma_direct __ro_after_init;
++EXPORT_SYMBOL(arm_dma_direct);
++
+ void __init setup_dma_zone(const struct machine_desc *mdesc)
+ {
++	/*
++	 * When CONFIG_ARM_LPAE is set, physical address can extend above
++	 * 32-bits, which then can't be addressed by devices that only support
++	 * 32-bit DMA.
++	 * Use the generic dma-direct / swiotlb ops code in that case, as that
++	 * handles bounce buffering for us.
++	 */
++	if (IS_ENABLED(CONFIG_ARM_LPAE))
++		arm_dma_direct = true;
++
+ #ifdef CONFIG_ZONE_DMA
+ 	if (mdesc->dma_zone_size) {
+ 		arm_dma_zone_size = mdesc->dma_zone_size;
