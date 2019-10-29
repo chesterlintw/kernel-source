@@ -1,0 +1,46 @@
+From: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Subject: [RFC,4/5] dma/direct: check for overflows in ARM's dma_capable()
+Date: Mon, 14 Oct 2019 18:31:43 +0200
+Patch-mainline: Submitted, https://patchwork.kernel.org/patch/11189297/
+References: jsc#SLE-7772
+
+The Raspberry Pi 4 has a 1GB ZONE_DMA area starting at address
+0x00000000 and a mapping between physical and DMA memory offset by
+0xc0000000.  It transpires that, on non LPAE systems, any attempt to
+translate physical addresses outside of ZONE_DMA will result in an
+overflow. The resulting DMA addresses will not be detected by arm's
+dma_capable() as they still fit in the device's DMA mask.
+
+Fix this by failing to validate a DMA address smaller than the lowest
+possible DMA address.
+
+Signed-off-by: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ arch/arm/include/asm/dma-direct.h | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/arm/include/asm/dma-direct.h b/arch/arm/include/asm/dma-direct.h
+index b67e5fc1fe43..ee8ad47a14e3 100644
+--- a/arch/arm/include/asm/dma-direct.h
++++ b/arch/arm/include/asm/dma-direct.h
+@@ -2,6 +2,8 @@ 
+ #ifndef ASM_ARM_DMA_DIRECT_H
+ #define ASM_ARM_DMA_DIRECT_H 1
+ 
++#include <linux/memblock.h>
++
+ static inline dma_addr_t __phys_to_dma(struct device *dev, phys_addr_t paddr)
+ {
+ 	unsigned int offset = paddr & ~PAGE_MASK;
+@@ -21,6 +23,10 @@  static inline bool dma_capable(struct device *dev, dma_addr_t addr, size_t size)
+ 	if (!dev->dma_mask)
+ 		return 0;
+ 
++	/* Check if address overflowed */
++	if (addr < __phys_to_dma(dev, PFN_UP(min_low_pfn)))
++		return 0;
++
+ 	mask = *dev->dma_mask;
+ 
+ 	limit = (mask + 1) & ~mask;
