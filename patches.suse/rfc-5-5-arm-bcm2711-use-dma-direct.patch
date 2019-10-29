@@ -1,0 +1,42 @@
+From: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Subject: [RFC,5/5] ARM: bcm2711: use dma-direct
+Date: Mon, 14 Oct 2019 18:31:43 +0200
+Patch-mainline: Submitted, https://patchwork.kernel.org/patch/11189299/
+References: jsc#SLE-7772
+
+The Raspberry Pi 4 supports up to 4GB of memory yet most of its devices
+are only able to address the fist GB. Enable dma-direct for that board
+in order to benefit from swiotlb's bounce buffering mechanism.
+
+Signed-off-by: Nicolas Saenz Julienne <nsaenzjulienne@suse.de>
+Signed-off-by: Chester Lin <clin@suse.com>
+---
+ arch/arm/mach-bcm/Kconfig   | 1 +
+ arch/arm/mach-bcm/bcm2711.c | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/arch/arm/mach-bcm/Kconfig b/arch/arm/mach-bcm/Kconfig
+index e4e25f287ad7..fd7d725d596c 100644
+--- a/arch/arm/mach-bcm/Kconfig
++++ b/arch/arm/mach-bcm/Kconfig
+@@ -163,6 +163,7 @@  config ARCH_BCM2835
+ 	select ARM_ERRATA_411920 if ARCH_MULTI_V6
+ 	select ARM_GIC if ARCH_MULTI_V7
+ 	select ZONE_DMA if ARCH_MULTI_V7
++	select SWIOTLB if ARCH_MULTI_V7
+ 	select ARM_TIMER_SP804
+ 	select HAVE_ARM_ARCH_TIMER if ARCH_MULTI_V7
+ 	select TIMER_OF
+diff --git a/arch/arm/mach-bcm/bcm2711.c b/arch/arm/mach-bcm/bcm2711.c
+index dbe296798647..67d98cb0533f 100644
+--- a/arch/arm/mach-bcm/bcm2711.c
++++ b/arch/arm/mach-bcm/bcm2711.c
+@@ -19,6 +19,7 @@  DT_MACHINE_START(BCM2711, "BCM2711")
+ #ifdef CONFIG_ZONE_DMA
+ 	.dma_zone_size	= SZ_1G,
+ #endif
++	.dma_direct = true,
+ 	.dt_compat = bcm2711_compat,
+ 	.smp = smp_ops(bcm2836_smp_ops),
+ MACHINE_END
+
