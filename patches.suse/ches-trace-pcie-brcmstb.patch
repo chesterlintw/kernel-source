@@ -9,9 +9,9 @@ Chester's debug patch.
 
 Signed-off-by: Chester Lin <clin@suse.com>
 ---
- drivers/pci/controller/pcie-brcmstb.c |   39 +++++++++++++++++++++++++++-------
- drivers/soc/bcm/brcmstb/memory.c      |    5 ++--
- 2 files changed, 35 insertions(+), 9 deletions(-)
+ drivers/pci/controller/pcie-brcmstb.c |   45 +++++++++++++++++++++++++++-------
+ drivers/soc/bcm/brcmstb/memory.c      |    5 ++-
+ 2 files changed, 39 insertions(+), 11 deletions(-)
 
 --- a/drivers/pci/controller/pcie-brcmstb.c
 +++ b/drivers/pci/controller/pcie-brcmstb.c
@@ -24,7 +24,27 @@ Signed-off-by: Chester Lin <clin@suse.com>
  #define BRCM_INT_PCI_MSI_NR		32
  #define BRCM_PCIE_HW_REV_33		0x0303
  
-@@ -998,9 +998,10 @@ static int brcm_pcie_add_controller(stru
+@@ -951,7 +951,8 @@ dma_addr_t brcm_phys_to_dma(struct devic
+ 	struct of_pci_range *p;
+ 
+ 	if (!dev || !dev_is_pci(dev))
+-		return (dma_addr_t)paddr;
++		return (dma_addr_t)paddr -
++			((dma_addr_t)dev->dma_pfn_offset << PAGE_SHIFT);
+ 	for (p = brcm_dma_ranges; p && p->size; p++)
+ 		if (paddr >= p->cpu_addr && paddr < (p->cpu_addr + p->size))
+ 			return (dma_addr_t)(paddr - p->cpu_addr + p->pci_addr);
+@@ -964,7 +965,8 @@ phys_addr_t brcm_dma_to_phys(struct devi
+ 	struct of_pci_range *p;
+ 
+ 	if (!dev || !dev_is_pci(dev))
+-		return (phys_addr_t)dev_addr;
++		return (phys_addr_t)dev_addr +
++			((phys_addr_t)dev->dma_pfn_offset << PAGE_SHIFT);
+ 	for (p = brcm_dma_ranges; p && p->size; p++)
+ 		if (dev_addr >= p->pci_addr
+ 		    && dev_addr < (p->pci_addr + p->size))
+@@ -998,9 +1000,10 @@ static int brcm_pcie_add_controller(stru
  	}
  
  	ret = brcm_pcie_parse_map_dma_ranges(pcie);
@@ -37,7 +57,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	/* Determine num_memc and their sizes */
  	for (i = 0, num_memc = 0; i < BRCM_MAX_SCB; i++) {
  		u64 size = brcmstb_memory_memc_size(i);
-@@ -1013,10 +1014,12 @@ static int brcm_pcie_add_controller(stru
+@@ -1013,10 +1016,12 @@ static int brcm_pcie_add_controller(stru
  			scb_size[i] = roundup_pow_of_two_64(size);
  			num_memc++;
  		} else {
@@ -50,7 +70,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  		ret = -EINVAL;
  		goto done;
  	}
-@@ -1116,8 +1119,21 @@ static int brcm_pcie_setup(struct brcm_p
+@@ -1116,8 +1121,21 @@ static int brcm_pcie_setup(struct brcm_p
  	/* Set SCB_MAX_BURST_SIZE, CFG_READ_UR_MODE, SCB_ACCESS_EN */
  	tmp = INSERT_FIELD(0, PCIE_MISC_MISC_CTRL, SCB_ACCESS_EN, 1);
  	tmp = INSERT_FIELD(tmp, PCIE_MISC_MISC_CTRL, CFG_READ_UR_MODE, 1);
@@ -74,7 +94,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	tmp = INSERT_FIELD(tmp, PCIE_MISC_MISC_CTRL, MAX_BURST_SIZE, burst);
  	bcm_writel(tmp, base + PCIE_MISC_MISC_CTRL);
  
-@@ -1476,25 +1492,32 @@ static int brcm_pcie_probe(struct platfo
+@@ -1476,25 +1494,32 @@ static int brcm_pcie_probe(struct platfo
  	if (ret)
  		return ret;
  
@@ -108,7 +128,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	if (pci_msi_enabled() && msi_dn == pcie->dn) {
  		ret = brcm_pcie_enable_msi(pcie);
  		if (ret)
-@@ -1512,6 +1535,7 @@ static int brcm_pcie_probe(struct platfo
+@@ -1512,6 +1537,7 @@ static int brcm_pcie_probe(struct platfo
  	bridge->map_irq = of_irq_parse_and_map_pci;
  	bridge->swizzle_irq = pci_common_swizzle;
  
@@ -116,7 +136,7 @@ Signed-off-by: Chester Lin <clin@suse.com>
  	ret = pci_scan_root_bus_bridge(bridge);
  	if (ret < 0) {
  		dev_err(pcie->dev, "Scanning root bridge failed\n");
-@@ -1521,10 +1545,11 @@ static int brcm_pcie_probe(struct platfo
+@@ -1521,10 +1547,11 @@ static int brcm_pcie_probe(struct platfo
  	pci_assign_unassigned_bus_resources(bridge->bus);
  	list_for_each_entry(child, &bridge->bus->children, node)
  		pcie_bus_configure_settings(child);
