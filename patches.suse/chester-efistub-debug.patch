@@ -1,0 +1,71 @@
+From: Chester Lin <clin@suse.com>
+Date: Mon, 11 Nov 2019 14:30:07 +0100
+Subject: [PATCH] ARM: efistub: efistub debug feature
+Patch-mainline: Not yet, debugging
+References: bsc#1145646
+
+arm efistub debug
+
+Signed-of-by: Chester Lin <clin@suse.com>
+---
+ drivers/firmware/efi/libstub/arm-stub.c |   15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+--- a/drivers/firmware/efi/libstub/arm-stub.c
++++ b/drivers/firmware/efi/libstub/arm-stub.c
+@@ -131,14 +131,20 @@ unsigned long efi_entry(void *handle, ef
+ 	enum efi_secureboot_mode secure_boot;
+ 	struct screen_info *si;
+ 
++	pr_efi(sys_table, "dbg: efi_entry get started\n");
++
+ 	/* Check if we were booted by the EFI firmware */
+ 	if (sys_table->hdr.signature != EFI_SYSTEM_TABLE_SIGNATURE)
+ 		goto fail;
+ 
++	pr_efi(sys_table, "dbg: sys_table signature checked\n");
++
+ 	status = check_platform_features(sys_table);
+ 	if (status != EFI_SUCCESS)
+ 		goto fail;
+ 
++	pr_efi(sys_table, "dbg: platform features checked\n");
++
+ 	/*
+ 	 * Get a handle to the loaded image protocol.  This is used to get
+ 	 * information about the running image, such as size and the command
+@@ -146,6 +152,9 @@ unsigned long efi_entry(void *handle, ef
+ 	 */
+ 	status = sys_table->boottime->handle_protocol(handle,
+ 					&loaded_image_proto, (void *)&image);
++
++	pr_efi(sys_table, "dbg: boottime: handle_protocol has been called\n");
++
+ 	if (status != EFI_SUCCESS) {
+ 		pr_efi_err(sys_table, "Failed to get loaded image protocol\n");
+ 		goto fail;
+@@ -157,6 +166,8 @@ unsigned long efi_entry(void *handle, ef
+ 		goto fail;
+ 	}
+ 
++	pr_efi(sys_table, "dbg: get_dram_base has been called\n");
++
+ 	/*
+ 	 * Get the command line from EFI, using the LOADED_IMAGE
+ 	 * protocol. We are going to copy the command line into the
+@@ -168,11 +179,15 @@ unsigned long efi_entry(void *handle, ef
+ 		goto fail;
+ 	}
+ 
++	pr_efi(sys_table, "dbg: get cmdline\n");
++
+ 	if (IS_ENABLED(CONFIG_CMDLINE_EXTEND) ||
+ 	    IS_ENABLED(CONFIG_CMDLINE_FORCE) ||
+ 	    cmdline_size == 0)
+ 		efi_parse_options(CONFIG_CMDLINE);
+ 
++	pr_efi(sys_table, "dbg: check-point\n");
++
+ 	if (!IS_ENABLED(CONFIG_CMDLINE_FORCE) && cmdline_size > 0)
+ 		efi_parse_options(cmdline_ptr);
+ 
