@@ -8,8 +8,9 @@ arm efistub debug
 
 Signed-of-by: Chester Lin <clin@suse.com>
 ---
- drivers/firmware/efi/libstub/arm-stub.c |   15 +++++++++++++++
- 1 file changed, 15 insertions(+)
+ drivers/firmware/efi/libstub/arm-stub.c        |   15 +++++++++++++++
+ drivers/firmware/efi/libstub/efi-stub-helper.c |   21 ++++++++++++++++++++-
+ 2 files changed, 35 insertions(+), 1 deletion(-)
 
 --- a/drivers/firmware/efi/libstub/arm-stub.c
 +++ b/drivers/firmware/efi/libstub/arm-stub.c
@@ -68,4 +69,61 @@ Signed-of-by: Chester Lin <clin@suse.com>
 +
  	if (!IS_ENABLED(CONFIG_CMDLINE_FORCE) && cmdline_size > 0)
  		efi_parse_options(cmdline_ptr);
+ 
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
++++ b/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -819,8 +819,11 @@ char *efi_convert_cmdline(efi_system_tab
+ 	efi_status_t status;
+ 	u16 zero = 0;
+ 
++	pr_efi(sys_table, "dbg: convert-start\n");
++
+ 	if (options) {
+ 		s2 = options;
++		pr_efi(sys_table, "search options\n");
+ 		while (*s2 && *s2 != '\n'
+ 		       && options_chars < load_options_chars) {
+ 			options_bytes += efi_utf8_bytes(*s2++);
+@@ -828,6 +831,8 @@ char *efi_convert_cmdline(efi_system_tab
+ 		}
+ 	}
+ 
++	pr_efi(sys_table, "dbg: check chars\n");
++
+ 	if (!options_chars) {
+ 		/* No command line options, so return empty string*/
+ 		options = &zero;
+@@ -835,18 +840,32 @@ char *efi_convert_cmdline(efi_system_tab
+ 
+ 	options_bytes++;	/* NUL termination */
+ 
++	pr_efi(sys_table, "dbg: call efi_high_alloc\n");
++
+ 	status = efi_high_alloc(sys_table_arg, options_bytes, 0,
+ 				&cmdline_addr, MAX_CMDLINE_ADDRESS);
++
++	pr_efi(sys_table, "done alloc\n");
++
+ 	if (status != EFI_SUCCESS)
+ 		return NULL;
+ 
++	pr_efi(sys_table, "s1\n");
++
+ 	s1 = (u8 *)cmdline_addr;
++
++	pr_efi(sys_table, "s2\n");
++
+ 	s2 = (const u16 *)options;
+ 
++	pr_efi(sys_table, "convert\n");
++
+ 	s1 = efi_utf16_to_utf8(s1, s2, options_chars);
++	pr_efi(sys_table, "term char\n");
+ 	*s1 = '\0';
+-
++	pr_efi(sys_table, "fill len\n");
+ 	*cmd_line_len = options_bytes;
++	pr_efi(sys_table, "convert-end\n");
+ 	return (char *)cmdline_addr;
+ }
  
