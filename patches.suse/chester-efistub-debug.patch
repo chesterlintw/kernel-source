@@ -76,11 +76,11 @@ Signed-of-by: Chester Lin <clin@suse.com>
  	efi_status_t status;
  	u16 zero = 0;
  
-+	pr_efi(sys_table, "dbg: convert-start\n");
++	pr_efi(sys_table_arg, "dbg: convert-start\n");
 +
  	if (options) {
  		s2 = options;
-+		pr_efi(sys_table, "search options\n");
++		pr_efi(sys_table_arg, "search options\n");
  		while (*s2 && *s2 != '\n'
  		       && options_chars < load_options_chars) {
  			options_bytes += efi_utf8_bytes(*s2++);
@@ -88,7 +88,7 @@ Signed-of-by: Chester Lin <clin@suse.com>
  		}
  	}
  
-+	pr_efi(sys_table, "dbg: check chars\n");
++	pr_efi(sys_table_arg, "dbg: check chars\n");
 +
  	if (!options_chars) {
  		/* No command line options, so return empty string*/
@@ -97,33 +97,33 @@ Signed-of-by: Chester Lin <clin@suse.com>
  
  	options_bytes++;	/* NUL termination */
  
-+	pr_efi(sys_table, "dbg: call efi_high_alloc\n");
++	pr_efi(sys_table_arg, "dbg: call efi_high_alloc\n");
 +
  	status = efi_high_alloc(sys_table_arg, options_bytes, 0,
  				&cmdline_addr, MAX_CMDLINE_ADDRESS);
 +
-+	pr_efi(sys_table, "done alloc\n");
++	pr_efi(sys_table_arg, "done alloc\n");
 +
  	if (status != EFI_SUCCESS)
  		return NULL;
  
-+	pr_efi(sys_table, "s1\n");
++	pr_efi(sys_table_arg, "s1\n");
 +
  	s1 = (u8 *)cmdline_addr;
 +
-+	pr_efi(sys_table, "s2\n");
++	pr_efi(sys_table_arg, "s2\n");
 +
  	s2 = (const u16 *)options;
  
-+	pr_efi(sys_table, "convert\n");
++	pr_efi(sys_table_arg, "convert\n");
 +
  	s1 = efi_utf16_to_utf8(s1, s2, options_chars);
-+	pr_efi(sys_table, "term char\n");
++	pr_efi(sys_table_arg, "term char\n");
  	*s1 = '\0';
 -
-+	pr_efi(sys_table, "fill len\n");
++	pr_efi(sys_table_arg, "fill len\n");
  	*cmd_line_len = options_bytes;
-+	pr_efi(sys_table, "convert-end\n");
++	pr_efi(sys_table_arg, "convert-end\n");
  	return (char *)cmdline_addr;
  }
  
